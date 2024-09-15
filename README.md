@@ -554,3 +554,315 @@ func main() {
 ---
 
 Если вы завершили этот этап, дайте знать! Если у вас есть вопросы или нужна помощь с какой-то частью, я готов помочь. Когда будете готовы — можем двигаться дальше к работе с базами данных.
+
+
+Отлично! Давайте двигаться дальше по нашему плану. Теперь, когда вы освоили работу с файлами и основными структурами данных, мы перейдем к следующему шагу — **работе с базами данных**. На этом этапе мы научимся:
+
+- Подключаться к базе данных.
+- Выполнять основные операции (CRUD — Create, Read, Update, Delete).
+- Работать с библиотекой Go для работы с базами данных (например, `database/sql` и драйвером для PostgreSQL).
+
+### **Шаг 4: Работа с базами данных (PostgreSQL)**
+
+#### **4.1 Установка и настройка PostgreSQL**
+
+Если у вас еще не установлен PostgreSQL, выполните следующие шаги для установки:
+
+- **Linux**: Используйте пакетный менеджер, например, `apt` или `yum`, для установки PostgreSQL.
+    ```bash
+    sudo apt update
+    sudo apt install postgresql postgresql-contrib
+    ```
+- **Mac**: Установите PostgreSQL через `brew`.
+    ```bash
+    brew install postgresql
+    ```
+- **Windows**: Загрузите и установите PostgreSQL с [официального сайта](https://www.postgresql.org/download/).
+
+После установки запустите сервер PostgreSQL:
+
+```bash
+sudo service postgresql start  # Для Linux
+brew services start postgresql # Для Mac
+```
+
+Создайте пользователя и базу данных:
+
+```bash
+sudo -u postgres createuser --interactive  # Создать нового пользователя
+sudo -u postgres createdb testdb           # Создать базу данных testdb
+```
+
+#### **4.2 Подключение к базе данных из Go**
+
+Для работы с PostgreSQL в Go мы будем использовать стандартную библиотеку `database/sql` и драйвер PostgreSQL — `github.com/lib/pq`.
+
+### Установка драйвера:
+
+```bash
+go get -u github.com/lib/pq
+```
+
+### Пример подключения к базе данных PostgreSQL:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	// Параметры подключения к базе данных
+	connStr := "user=youruser password=yourpassword dbname=testdb sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Проверка соединения с базой данных
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Успешно подключено к базе данных!")
+}
+```
+
+### Пояснение:
+
+1. **`sql.Open("postgres", connStr)`**: Открываем соединение с базой данных PostgreSQL. В строке подключения (`connStr`) необходимо указать пользователя, пароль и имя базы данных.
+2. **`db.Ping()`**: Проверяет, что соединение с базой данных успешно.
+3. **`defer db.Close()`**: Закрывает соединение с базой данных после завершения программы.
+
+### Задача:
+1. Настройте подключение к вашей базе данных PostgreSQL.
+2. Выполните тестовое подключение с выводом сообщения об успешном подключении.
+
+---
+
+#### **4.3 Основные операции с базой данных (CRUD)**
+
+Теперь давайте рассмотрим, как выполнять основные операции с базой данных: создание (Create), чтение (Read), обновление (Update) и удаление (Delete).
+
+### **Создание таблицы в PostgreSQL:**
+
+Перед тем как выполнять CRUD-операции, нам нужно создать таблицу. Допустим, мы хотим создать таблицу для хранения информации о задачах (TODO).
+
+```sql
+CREATE TABLE tasks (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(100),
+    description TEXT,
+    done BOOLEAN DEFAULT FALSE
+);
+```
+
+Эта таблица содержит:
+- `id` — идентификатор задачи (уникальный, автоматически увеличивается).
+- `title` — заголовок задачи.
+- `description` — описание задачи.
+- `done` — флаг выполнения задачи (по умолчанию — `false`).
+
+#### **4.4 Вставка данных (Create)**
+
+### Пример вставки данных в таблицу:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	connStr := "user=youruser password=yourpassword dbname=testdb sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Вставка новой задачи в таблицу tasks
+	sqlInsert := `
+		INSERT INTO tasks (title, description) 
+		VALUES ($1, $2) RETURNING id`
+	id := 0
+	err = db.QueryRow(sqlInsert, "Первая задача", "Описание первой задачи").Scan(&id)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Задача успешно добавлена с ID: %d\n", id)
+}
+```
+
+### Пояснение:
+1. **Запрос на вставку**: Мы используем SQL-запрос `INSERT INTO` для добавления новой записи в таблицу `tasks`.
+2. **`RETURNING id`**: Этот фрагмент запроса возвращает значение нового `id` задачи.
+3. **`db.QueryRow`**: Выполняет SQL-запрос и возвращает результат (новый `id`).
+
+### Задача:
+1. Вставьте несколько задач в таблицу `tasks`.
+2. Выведите идентификаторы новых задач.
+
+---
+
+#### **4.5 Чтение данных (Read)**
+
+Теперь научимся считывать данные из базы данных.
+
+### Пример чтения данных из таблицы:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "github.com/lib/pq"
+)
+
+type Task struct {
+	ID          int
+	Title       string
+	Description string
+	Done        bool
+}
+
+func main() {
+	connStr := "user=youruser password=yourpassword dbname=testdb sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Чтение всех задач
+	rows, err := db.Query("SELECT id, title, description, done FROM tasks")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var task Task
+		err := rows.Scan(&task.ID, &task.Title, &task.Description, &task.Done)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Задача: ID=%d, Заголовок=%s, Описание=%s, Выполнено=%t\n", task.ID, task.Title, task.Description, task.Done)
+	}
+}
+```
+
+### Пояснение:
+1. **`db.Query`**: Выполняет SQL-запрос на чтение всех задач.
+2. **`rows.Next()`**: Итерирует по результатам запроса.
+3. **`rows.Scan()`**: Извлекает значения столбцов из текущей строки.
+
+### Задача:
+1. Напишите программу, которая выводит все задачи из таблицы `tasks`.
+
+---
+
+#### **4.6 Обновление данных (Update)**
+
+### Пример обновления данных:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	connStr := "user=youruser password=yourpassword dbname=testdb sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Обновление статуса задачи
+	sqlUpdate := `
+		UPDATE tasks 
+		SET done = $1 
+		WHERE id = $2`
+	_, err = db.Exec(sqlUpdate, true, 1)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Задача обновлена")
+}
+```
+
+### Задача:
+1. Напишите программу, которая обновляет статус задачи (сделано/не сделано).
+
+---
+
+#### **4.7 Удаление данных (Delete)**
+
+### Пример удаления данных:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	connStr := "user=youruser password=yourpassword dbname=testdb sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Удаление задачи
+	sqlDelete := `DELETE FROM tasks WHERE id = $1`
+	_, err = db.Exec(sqlDelete, 1)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Задача удалена")
+}
+```
+
+### Задача:
+1. Напишите программу, которая удаляет задачу по ее `id`.
+
+---
+
+### Домашняя работа:
+1. Настройте подключение к базе данных PostgreSQL.
+2. Создайте таблицу `tasks`.
+3. Реализуйте программу с CRUD-операциями (создание, чтение, обновление, удаление задач).
+4. Добавьте возможность фильтрации задач (например, только выполненные задачи).
+
+Если все это понятно и выполнено, можем двигаться дальше, например, к созданию веб-приложения с использованием фрей
