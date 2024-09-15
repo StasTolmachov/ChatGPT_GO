@@ -62,16 +62,16 @@ func pvt(v interface{}) {
 func main() {
 	fileData, err := ioutil.ReadFile("data.txt")
 	if err != nil {
-		fmt.Printf("read file error:\n%v\n")
+		fmt.Printf("read file error:\n%v\n", err)
 	}
 	fileString := string(fileData)
-	fmt.Printf("data:\n%v\n", string(fileData))
+	fmt.Printf("data:\n%v\n", fileData)
 
 	fileStringUpper := strings.ToUpper(fileString)
 
 	file, err := os.Create("data2.txt")
 	if err != nil {
-		fmt.Printf("create file error:\n%v\n")
+		fmt.Printf("create file error:\n%v\n", err)
 	}
 	defer file.Close()
 
@@ -82,7 +82,7 @@ func main() {
 
 	fileData, err = ioutil.ReadFile("data2.txt")
 	if err != nil {
-		fmt.Printf("read file error:\n%v\n")
+		fmt.Printf("read file error:\n%v\n", err)
 	}
 	fmt.Printf("data2:\n%v\n", string(fileData))
 }
