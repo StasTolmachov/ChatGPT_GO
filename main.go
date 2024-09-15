@@ -1,15 +1,41 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
+	"os"
 )
 
 func main() {
-	content, err := ioutil.ReadFile("data.txt")
+	file, err := os.Create("userInput.txt")
 	if err != nil {
-		fmt.Println("error open file", err)
+		fmt.Println("file open error: ", err)
 		return
 	}
-	fmt.Printf("content from file: \n%v\n", string(content))
+
+	defer file.Close()
+
+	scan := bufio.NewScanner(os.Stdin)
+	for scan.Scan() {
+		input := scan.Text()
+
+		if input == "" {
+			break
+		}
+
+		_, err := file.WriteString(input + "\n")
+		if err != nil {
+			fmt.Println("file writing error: ", err)
+			return
+		}
+	}
+
+	fileData, err := ioutil.ReadFile("userInput.txt")
+	if err != nil {
+		fmt.Println("file reading error: ", err)
+		return
+	}
+	fmt.Printf("file contents:\n%v\n", string(fileData))
+
 }
