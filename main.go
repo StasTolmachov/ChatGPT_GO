@@ -1,92 +1,110 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v4"
 	"net/http"
-	"os"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	_ "github.com/golang-jwt/jwt/v4"
 )
 
-// Структуры для парсинга данных из API
-type WeatherResponse struct {
-	Lat      float64 `json:"lat"`
-	Lon      float64 `json:"lon"`
-	Timezone string  `json:"timezone"`
-	Current  Current `json:"current"`
-	Daily    []Daily `json:"daily"`
+var jwtSecret = []byte("your_jwt_secret_key") // Секретный ключ для подписи токенов
+
+// Структура для хранения информации в токене
+type Claims struct {
+	Username string `json:"username"`
+	jwt.RegisteredClaims
 }
 
-type Current struct {
-	Temp      float64   `json:"temp"`
-	FeelsLike float64   `json:"feels_like"`
-	Weather   []Weather `json:"weather"`
+// Генерация JWT токена для пользователя
+func generateToken(username string) (string, error) {
+	// Определяем время жизни токена (например, 1 час)
+	expirationTime := time.Now().Add(1 * time.Hour)
+	claims := &Claims{
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+	// Создаем токен
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	// Подписываем токен секретным ключом
+	tokenString, err := token.SignedString(jwtSecret)
+	return tokenString, err
 }
 
-type Daily struct {
-	Temp    Temp      `json:"temp"`
-	Weather []Weather `json:"weather"`
+// Аутентификация пользователя (логин)
+func login(c *gin.Context) {
+	var user struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Пример простой проверки имени пользователя и пароля (без базы данных)
+	if user.Username == "admin" && user.Password == "password" {
+		// Генерация JWT токена
+		token, err := generateToken(user.Username)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+
+		// Возвращаем JWT токен клиенту
+		c.JSON(http.StatusOK, gin.H{"token": token})
+	} else {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+	}
 }
 
-type Temp struct {
-	Day float64 `json:"day"`
-	Min float64 `json:"min"`
-	Max float64 `json:"max"`
+// Middleware для проверки JWT токена
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token required"})
+			c.Abort()
+			return
+		}
+
+		claims := &Claims{}
+		// Парсинг и проверка JWT токена
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		// Сохраняем информацию о пользователе в контексте
+		c.Set("username", claims.Username)
+		c.Next()
+	}
 }
 
-type Weather struct {
-	Description string `json:"description"`
+// Защищенный ресурс (требует наличия валидного JWT токена)
+func protectedResource(c *gin.Context) {
+	username, _ := c.Get("username")
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Hello, %s! You have access to the protected resource.", username)})
 }
 
 func main() {
-	apiKey := "76f2a967651d25b1e25a69fa6058be83"
-	lat := "69.7671"
-	lon := "21.0256"
+	router := gin.Default()
 
-	// Формирование URL запроса
-	url := fmt.Sprintf("https://api.openweathermap.org/data/3.0/onecall?lat=%s&lon=%s&appid=%s&units=metric", lat, lon, apiKey)
+	// Маршрут для аутентификации (логин)
+	router.POST("/login", login)
 
-	// Отправка GET запроса
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Println("Error while sending request:", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
+	// Защищенный маршрут (требует токен)
+	router.GET("/protected", authMiddleware(), protectedResource)
 
-	// Декодируем ответ в структуру WeatherResponse
-	var weatherResponse WeatherResponse
-	if err := json.NewDecoder(resp.Body).Decode(&weatherResponse); err != nil {
-		fmt.Println("Error while decoding response:", err)
-		os.Exit(1)
-	}
-
-	// Пример вывода текущей погоды
-	fmt.Printf("Current temperature: %.2f°C\n", weatherResponse.Current.Temp)
-	fmt.Printf("Feels like: %.2f°C\n", weatherResponse.Current.FeelsLike)
-	fmt.Printf("Description: %s\n", weatherResponse.Current.Weather[0].Description)
-
-	// Переменные для хранения минимальных и максимальных температур за несколько дней
-	dailyMinTemp := weatherResponse.Daily[0].Temp.Min
-	dailyMaxTemp := weatherResponse.Daily[0].Temp.Max
-
-	// Пример вывода прогноза на каждый день
-	fmt.Println("\nDaily Forecast:")
-	for _, daily := range weatherResponse.Daily {
-		// Обновление минимальной и максимальной температуры
-		if daily.Temp.Min < dailyMinTemp {
-			dailyMinTemp = daily.Temp.Min
-		}
-		if daily.Temp.Max > dailyMaxTemp {
-			dailyMaxTemp = daily.Temp.Max
-		}
-
-		// Вывод прогноза на день без округления
-		fmt.Printf("Day Temp: %.2f°C, Min: %.2f°C, Max: %.2f°C\n", daily.Temp.Day, daily.Temp.Min, daily.Temp.Max)
-		fmt.Printf("Description: %s\n", daily.Weather[0].Description)
-		fmt.Println("-----------")
-	}
-
-	// Вывод минимальной и максимальной температуры за несколько дней
-	fmt.Printf("\nOverall Min Temperature: %.2f°C\n", dailyMinTemp)
-	fmt.Printf("Overall Max Temperature: %.2f°C\n", dailyMaxTemp)
+	// Запуск сервера
+	router.Run(":8080")
 }
