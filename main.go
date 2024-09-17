@@ -1,140 +1,92 @@
 package main
 
 import (
-	"database/sql"
-	"github.com/gin-gonic/gin"
-	_ "github.com/lib/pq"
-	"log"
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"strconv"
+	"os"
 )
 
-type Task struct {
-	ID          int    `json:"ID"`
-	Title       string `json:"Title"`
-	Description string `json:"Description"`
-	Done        bool   `json:"Done"`
+// Структуры для парсинга данных из API
+type WeatherResponse struct {
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	Timezone string  `json:"timezone"`
+	Current  Current `json:"current"`
+	Daily    []Daily `json:"daily"`
 }
 
-const connection = "user=postgres dbname=testdb sslmode=disable"
+type Current struct {
+	Temp      float64   `json:"temp"`
+	FeelsLike float64   `json:"feels_like"`
+	Weather   []Weather `json:"weather"`
+}
 
-var db *sql.DB
+type Daily struct {
+	Temp    Temp      `json:"temp"`
+	Weather []Weather `json:"weather"`
+}
+
+type Temp struct {
+	Day float64 `json:"day"`
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+type Weather struct {
+	Description string `json:"description"`
+}
 
 func main() {
-	var err error
-	db, err = sql.Open("postgres", connection)
+	apiKey := "76f2a967651d25b1e25a69fa6058be83"
+	lat := "69.7671"
+	lon := "21.0256"
+
+	// Формирование URL запроса
+	url := fmt.Sprintf("https://api.openweathermap.org/data/3.0/onecall?lat=%s&lon=%s&appid=%s&units=metric", lat, lon, apiKey)
+
+	// Отправка GET запроса
+	resp, err := http.Get(url)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("Error while sending request:", err)
+		os.Exit(1)
 	}
-	defer db.Close()
+	defer resp.Body.Close()
 
-	router := gin.Default()
-
-	router.GET("/api/tasks", getAllTasks)
-	router.GET("/api/tasks/:id", getTaskByID)
-	router.POST("/api/tasks", createTask)
-	router.PUT("/api/tasks/:id", updateTask)
-	router.DELETE("/api/tasks/:id", deleteTask)
-
-	router.Run(":8080")
-
-}
-
-// getAllTasks возвращает все задачи в формате JSON
-func getAllTasks(c *gin.Context) {
-	rows, err := db.Query("select id, title, description, done from tasks")
-	if err != nil {
-		log.Fatal(err)
+	// Декодируем ответ в структуру WeatherResponse
+	var weatherResponse WeatherResponse
+	if err := json.NewDecoder(resp.Body).Decode(&weatherResponse); err != nil {
+		fmt.Println("Error while decoding response:", err)
+		os.Exit(1)
 	}
-	defer rows.Close()
 
-	var tasks []Task
-	for rows.Next() {
-		var task Task
-		err := rows.Scan(&task.ID, &task.Title, &task.Description, &task.Done)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+	// Пример вывода текущей погоды
+	fmt.Printf("Current temperature: %.2f°C\n", weatherResponse.Current.Temp)
+	fmt.Printf("Feels like: %.2f°C\n", weatherResponse.Current.FeelsLike)
+	fmt.Printf("Description: %s\n", weatherResponse.Current.Weather[0].Description)
+
+	// Переменные для хранения минимальных и максимальных температур за несколько дней
+	dailyMinTemp := weatherResponse.Daily[0].Temp.Min
+	dailyMaxTemp := weatherResponse.Daily[0].Temp.Max
+
+	// Пример вывода прогноза на каждый день
+	fmt.Println("\nDaily Forecast:")
+	for _, daily := range weatherResponse.Daily {
+		// Обновление минимальной и максимальной температуры
+		if daily.Temp.Min < dailyMinTemp {
+			dailyMinTemp = daily.Temp.Min
 		}
-		tasks = append(tasks, task)
-	}
-	c.JSON(http.StatusOK, tasks)
-}
-
-// getTaskByID возвращает задачу по ID
-func getTaskByID(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-		return
-	}
-	var task Task
-	err = db.QueryRow("select id, title, description, done from tasks where id = $1", id).Scan(&task.ID, &task.Title, &task.Description, &task.Done)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if daily.Temp.Max > dailyMaxTemp {
+			dailyMaxTemp = daily.Temp.Max
 		}
-		return
-	}
-	c.JSON(http.StatusOK, task)
-}
 
-// createTask создает новую задачу
-func createTask(c *gin.Context) {
-	var newTask Task
-	if err := c.ShouldBindJSON(&newTask); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		// Вывод прогноза на день без округления
+		fmt.Printf("Day Temp: %.2f°C, Min: %.2f°C, Max: %.2f°C\n", daily.Temp.Day, daily.Temp.Min, daily.Temp.Max)
+		fmt.Printf("Description: %s\n", daily.Weather[0].Description)
+		fmt.Println("-----------")
 	}
 
-	sqlInsert := `insert into tasks (title, description, done) values ($1, $2, $3) returning id`
-	err := db.QueryRow(sqlInsert, newTask.Title, newTask.Description, newTask.Done).Scan(&newTask.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusCreated, newTask)
-}
-
-// updateTask обновляет задачу по ID
-func updateTask(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-		return
-	}
-	var updateTask Task
-	if err := c.ShouldBindJSON(&updateTask); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	sqlUpdate := `update tasks set title = $1, description = $2, done = $3 where id = $4`
-
-	_, err = db.Exec(sqlUpdate, updateTask.Title, updateTask.Description, updateTask.Done, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, updateTask)
-}
-
-// deleteTask удаляет задачу по ID
-func deleteTask(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-		return
-	}
-
-	sqlDelete := `DELETE FROM tasks WHERE id = $1`
-	_, err = db.Exec(sqlDelete, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Task deleted"})
+	// Вывод минимальной и максимальной температуры за несколько дней
+	fmt.Printf("\nOverall Min Temperature: %.2f°C\n", dailyMinTemp)
+	fmt.Printf("Overall Max Temperature: %.2f°C\n", dailyMaxTemp)
 }
