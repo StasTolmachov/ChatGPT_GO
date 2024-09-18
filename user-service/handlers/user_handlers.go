@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"ChatGPT_GO/user-service/auth"
 	"ChatGPT_GO/user-service/database"
 	"ChatGPT_GO/user-service/models"
+	"database/sql"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -55,4 +57,56 @@ func GetUserById(c *gin.Context) {
 	// Возвращаем данные пользователя в формате JSON
 	log.Println("Возвращаем данные пользователя в ответе")
 	c.JSON(http.StatusOK, user)
+}
+
+// LoginHandler — обработчик логина
+func LoginHandler(c *gin.Context) {
+	var loginData struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	// Привязка данных JSON
+	if err := c.ShouldBindJSON(&loginData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	// Проверка пользователя в базе данных
+	var user models.User
+	err := database.Db.QueryRow("SELECT id, username, password FROM users WHERE username = $1", loginData.Username).
+		Scan(&user.Id, &user.Username, &user.Password)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+			return
+		}
+		log.Printf("Ошибка запроса пользователя из базы данных: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+		return
+	}
+
+	// Валидация пароля
+	if loginData.Password != user.Password {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+		return
+	}
+
+	// Генерация JWT токена
+	token, err := auth.GenerateJWT(user.Username)
+	if err != nil {
+		log.Printf("Ошибка генерации токена: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
+		return
+	}
+
+	// Возвращаем токен клиенту
+	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func ProtectedRoute(c *gin.Context) {
+	// Извлекаем имя пользователя из токена
+	username := c.MustGet("username").(string)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Welcome " + username + "!"})
 }

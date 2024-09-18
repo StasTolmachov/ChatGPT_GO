@@ -24,8 +24,11 @@ func main() {
 
 	router := gin.Default()
 
+	// Маршрут для логина
+	router.POST("/users/login", handlers.LoginHandler)
+
 	router.POST("/users/register", handlers.RegisterUser)
 	router.GET("/users/:id", handlers.GetUserById)
 
-	router.Run(":8082")
+	router.Run(":8081")
 }

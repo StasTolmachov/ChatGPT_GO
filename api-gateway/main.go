@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ChatGPT_GO/user-service/auth"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http/httputil"
@@ -17,15 +18,34 @@ func reverseProxy(target string, c *gin.Context) {
 func main() {
 	router := gin.Default()
 
-	// Прокси для Task Service
-	router.Any("/tasks/*proxyPath", func(c *gin.Context) {
+	// Маршрут для авторизации (JWT не проверяется)
+	router.POST("/users/login", func(c *gin.Context) {
 		reverseProxy("http://localhost:8081", c)
 	})
 
-	// Прокси для User Service
-	router.Any("/users/*proxyPath", func(c *gin.Context) {
-		reverseProxy("http://localhost:8082", c)
+	// Маршрут для регистрации
+	router.POST("/users/register", func(c *gin.Context) {
+		reverseProxy("http://localhost:8081", c)
 	})
 
+	// Защищенные маршруты
+	protected := router.Group("/tasks")
+	protected.Use(auth.JWTAuthMiddleware()) // Применение JWT middleware
+	{
+		protected.Any("/*proxyPath", func(c *gin.Context) {
+			reverseProxy("http://localhost:8082", c) // Прокси на Task Service
+		})
+	}
+	/*
+		// Прокси для Task Service
+		router.Any("/tasks/*proxyPath", func(c *gin.Context) {
+			reverseProxy("http://localhost:8081", c) // Прокси на User Service
+		})
+
+		// Прокси для User Service
+		router.Any("/users/*proxyPath", func(c *gin.Context) {
+			reverseProxy("http://localhost:8082", c)
+		})
+	*/
 	router.Run(":8080")
 }
