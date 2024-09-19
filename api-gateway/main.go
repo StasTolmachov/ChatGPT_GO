@@ -36,16 +36,6 @@ func main() {
 			reverseProxy("http://localhost:8082", c) // Прокси на Task Service
 		})
 	}
-	/*
-		// Прокси для Task Service
-		router.Any("/tasks/*proxyPath", func(c *gin.Context) {
-			reverseProxy("http://localhost:8081", c) // Прокси на User Service
-		})
 
-		// Прокси для User Service
-		router.Any("/users/*proxyPath", func(c *gin.Context) {
-			reverseProxy("http://localhost:8082", c)
-		})
-	*/
 	router.Run(":8080")
 }
