@@ -16,6 +16,8 @@ func reverseProxy(target string, c *gin.Context) {
 }
 
 func main() {
+	//todo logger init
+	
 	router := gin.Default()
 
 	// Маршрут для авторизации (JWT не проверяется)

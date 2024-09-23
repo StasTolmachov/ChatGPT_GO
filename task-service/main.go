@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+	//todo logger init
 	var err error
 	database.Db, err = sql.Open("postgres", database.Connection)
 	if err != nil {

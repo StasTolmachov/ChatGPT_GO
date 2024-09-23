@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	logger.MakeLogger()
+	logger.MakeLogger() //logger init
 	logger.Log.Info("start api")
 
 	var err error

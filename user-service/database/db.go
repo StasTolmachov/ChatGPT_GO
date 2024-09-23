@@ -1,6 +1,9 @@
 package database
 
-import "database/sql"
+import (
+	"ChatGPT_GO/user-service/logger"
+	"database/sql"
+)
 
 const ConnStr = "user=postgres dbname=testdb sslmode=disable host=localhost port=5432"
 
@@ -16,6 +19,7 @@ type PostgresStruct struct {
 }
 
 func (r *PostgresStruct) DbPingMethod() error {
+	logger.Log.Info()
 	return r.Db.Ping()
 }
 
@@ -23,5 +27,6 @@ func (r *PostgresStruct) RegisterUserMethod(username, password string) (int, err
 	var id int
 	sqlInsert := `insert into users (username, password) values ($1, $2) returning id`
 	r.Db.QueryRow(sqlInsert, username, password).Scan(&id)
+	logger.Log.Info()
 	return id, nil
 }

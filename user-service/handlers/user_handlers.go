@@ -3,6 +3,7 @@ package handlers
 import (
 	"ChatGPT_GO/user-service/auth"
 	"ChatGPT_GO/user-service/database"
+	"ChatGPT_GO/user-service/logger"
 	"ChatGPT_GO/user-service/models"
 	"database/sql"
 	"fmt"
@@ -12,36 +13,40 @@ import (
 	"strconv"
 )
 
+//todo logger
+
 // RegisterUser registerUser регистрирует нового пользователя
 func RegisterUser(repo database.DbInterface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var newUser models.User
 		if err := c.ShouldBindJSON(&newUser); err != nil {
-			log.Printf("c.ShouldBindJSON(&newUser): %v", err)
+			logger.Log.Error(err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
 		if err := repo.DbPingMethod(); err != nil {
-			log.Fatalf("Error pinging database: %v", err)
+			logger.Log.Error(err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
 			return
 		}
 
 		id, err := repo.RegisterUserMethod(newUser.Username, newUser.Password)
-
 		if err != nil {
-			log.Printf("database.Db.QueryRow(sqlInsert, newUser.Username, newUser.Password).Scan(&newUser.Id) %v", err)
+			logger.Log.Error(err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
 		newUser.Id = id
 		c.JSON(http.StatusCreated, newUser)
+		logger.Log.Infof("id=%v user=%v pass=%v", newUser.Id, newUser.Username, newUser.Password)
 	}
 
 }
 
 func GetUserById(c *gin.Context) {
+
 	var user models.User
 	id, err := strconv.Atoi(c.Param("id"))
 
