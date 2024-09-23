@@ -13,26 +13,32 @@ import (
 )
 
 // RegisterUser registerUser регистрирует нового пользователя
-func RegisterUser(c *gin.Context) {
-	var newUser models.User
-	if err := c.ShouldBindJSON(&newUser); err != nil {
-		log.Printf("c.ShouldBindJSON(&newUser): %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if err := database.Db.Ping(); err != nil {
-		log.Fatalf("Error pinging database: %v", err)
+func RegisterUser(repo database.DbInterface) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var newUser models.User
+		if err := c.ShouldBindJSON(&newUser); err != nil {
+			log.Printf("c.ShouldBindJSON(&newUser): %v", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := repo.DbPingMethod(); err != nil {
+			log.Fatalf("Error pinging database: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
+			return
+		}
+
+		id, err := repo.RegisterUserMethod(newUser.Username, newUser.Password)
+
+		if err != nil {
+			log.Printf("database.Db.QueryRow(sqlInsert, newUser.Username, newUser.Password).Scan(&newUser.Id) %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		newUser.Id = id
+		c.JSON(http.StatusCreated, newUser)
 	}
 
-	sqlInsert := `insert into users (username, password) values ($1, $2) returning id`
-
-	err := database.Db.QueryRow(sqlInsert, newUser.Username, newUser.Password).Scan(&newUser.Id)
-	if err != nil {
-		log.Printf("database.Db.QueryRow(sqlInsert, newUser.Username, newUser.Password).Scan(&newUser.Id) %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusCreated, newUser)
 }
 
 func GetUserById(c *gin.Context) {

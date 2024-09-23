@@ -20,12 +20,12 @@ func main() {
 
 	// Маршрут для авторизации (JWT не проверяется)
 	router.POST("/users/login", func(c *gin.Context) {
-		reverseProxy("http://user-service:8081", c)
+		reverseProxy("http://localhost:8081", c) //http://user-service:8081 docker
 	})
 
 	// Маршрут для регистрации
 	router.POST("/users/register", func(c *gin.Context) {
-		reverseProxy("http://user-service:8081", c)
+		reverseProxy("http://localhost:8081", c) //http://user-service:8081
 	})
 
 	// Защищенные маршруты
@@ -33,7 +33,7 @@ func main() {
 	protected.Use(auth.JWTAuthMiddleware()) // Применение JWT middleware
 	{
 		protected.Any("/*proxyPath", func(c *gin.Context) {
-			reverseProxy("http://task-service:8082", c) // Прокси на Task Service
+			reverseProxy("http://localhost:8082", c) // http://task-service:8082
 		})
 	}
 
