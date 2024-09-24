@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"ChatGPT_GO/user-service/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"net/http"
@@ -27,16 +28,20 @@ func GenerateJWT(username string) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
+	logger.Log.Info("Устанавили время жизни токена")
 
 	// Создаем токен с алгоритмом HS256 и данными claims
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	logger.Log.Info("токен с алгоритмом HS256 и данными claims")
 
 	// Подписываем токен секретным ключом
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
 		return "", err
 	}
+	logger.Log.Infof("Подписываем токен секретным ключом %v", tokenString)
 	return tokenString, nil
+
 }
 
 // Middleware для проверки JWT токена
@@ -45,6 +50,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is missing"})
+			logger.Log.Info("Authorization header is missing")
 			c.Abort()
 			return
 		}
